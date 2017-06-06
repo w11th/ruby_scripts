@@ -1,0 +1,60 @@
+#!/usr/bin/env ruby -w
+
+data_dir = (ARGV[0] || 'data')
+raise "couldn't find directory #{data_dir}" unless File.directory?(data_dir)
+
+Dir.chdir(data_dir)
+Dir.mkdir("processed") unless File.directory?('processed')
+
+DAY_INDEX = {}
+NOW = Time.now
+
+%w(Mon Tue Wen Thu Fri Sat Sun).each_with_index do |day, i|
+  DAY_INDEX[day] = i + 1
+end
+
+def parse_event(login_fields, host)
+  user, device, source, date_info = login_fields
+  date_info =~ /^(...). (.){12}/
+
+  wday, date = DAY_INDEX[$1], Time.parse($2)
+  while wday != date.wday || date > NOW
+    date = Time.local(date.year - 1, date.month, date.day, date.hour, date.min)
+  end
+  p date
+  duration = nil
+  if date_info =~ /\((\d+\+)?(\d+):(\d+)\)$/
+    days, hours, mins = $1.to_i, $2.to_i, $3.to_i
+    duration = mins + hours * 60 + days * 24 * 60
+  end
+
+  { user: user, device: device, source: source, date: date, duration: duration, host: host }
+end
+
+def assign_event(event, bin_hash)
+  date_key = event[:date].strftime('%Y%m%d')
+  bin = (bin_hash[date_key] ||= {})
+  event_key = event.values_at(:user, :device, :source, :date, :host).join(';')
+  bin[event_key] = event
+end
+
+data_files, periods = Dir['*.yml'], {}
+
+data_files.each do |file|
+  host = File.basename(file, 'yml').gsub(/\.[^\.]*$/)
+  logins = YAML.load_file(file)
+  logins.each do |login|
+    event = parse_event(login, host)
+    p event
+    assign_event(event, periods)
+  end
+end
+
+periods.each do |date_string, events|
+  event_file = File.join('proccessed', data_string + '.yaml')
+  if File.exist?(event_file)
+    old_events = YAML.load_file(event_file)
+    events = old_events.merge(events)
+  end
+  File.open(event_file, 'w') { |f| YAML.dump(events, f) }
+end

@@ -20,7 +20,7 @@ class PListParser
     when 'data', 'integer', 'key', 'real', 'string' then @to_read = name
     when 'true' then add_object(true)
     when 'false' then add_object(false)
-    else raise "unknown tag: #{name} on line: #{$.}"
+    else raise "unknown tag: #{name} on line: #{$NR}"
     end
   end
 
