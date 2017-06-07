@@ -10,7 +10,7 @@ class RemoteHost
     logins = []
     exec do |ssh|
       result = ''
-      ssh.exec!('last') do |channel, stream, data|
+      ssh.exec!('last') do |_channel, stream, data|
         result << data if stream == :stdout
       end
       result.split("\n").each do |line|
