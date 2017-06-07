@@ -1,0 +1,57 @@
+#!/usr/bin/env ruby -w
+
+require 'yaml'
+require 'graphviz'
+
+source_dir = (ARGV[0] || 'data/processed')
+raise "couldn't find directory #{source_dir}" unless File.directory?(source_dir)
+
+# users = {}
+
+# Dir[File.join(source_dir, '*')].each do |file|
+#   date_string = File.basename(file, '.yaml')
+#   events = YAML.load_file(file)
+#   events.each do |_key, event|
+#     duration = event[:duration].to_i
+#     next unless duration > 0
+#     user = (users[event[:user]] ||= Hash.new(0))
+#     user[date_string] += duration
+#   end
+# end
+
+# exit if users.empty?
+# all_dates = users.map { |_user, dates| dates.keys }.flatten.uniq.sort
+# graph = Graph.new(point_markers: all_dates)
+# graph.renderer = Renderers::Standard.new
+# graph.title = 'Total Login Minutes per User'
+# users.each do |user, dates|
+#   all_values = all_dates.map { |date| dates[date].to_i }
+#   graph.add(:line, user, all_values)
+# end
+# # p graph.render(to: '/tmp/user_accounting.svg')
+# graph.render(as: 'PNG', width: 1024, to: '/tmp/user_accounting.png')
+
+users_hosts = {}
+
+Dir[File.join(source_dir, '*')].each do |file|
+  events = YAML.load_file(file)
+  events.each do |_key, event|
+    host = event[:host]
+    next if host.nil?
+    user_hosts = (users_hosts[event[:user]] ||= Hash.new(0))
+    user_hosts[host] += 1
+  end
+end
+
+exit if users_hosts.empty?
+
+graph = GraphViz.new(:G, type: :digraph)
+users_hosts.each do |user, hosts|
+  graph.add_node(user)
+  hosts.each do |host, usage|
+    graph.add_nodes(host)
+    graph.add_edges(user, host, weight: usage)
+  end
+end
+
+graph.output(png: '/tmp/user_relationships.png')
