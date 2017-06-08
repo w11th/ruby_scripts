@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby -w
 gem 'cmdparse', '= 2.0.2'
+require 'cmdparse'
 require 'creditcard'
 
 cmd = CmdParse::CommandParser.new(true, true)

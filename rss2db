@@ -1,0 +1,54 @@
+#!/usr/bin/env ruby -w
+
+require 'active_record'
+require 'feed-normalizer'
+require 'open-uri'
+
+feed_url = ARGV[0]
+
+ActiveRecord::Base.establish_connection(
+  adapter: 'sqlite3',
+  database: 'rss2db.sqlite3'
+)
+
+class Item < ActiveRecord::Base
+end
+
+unless Item.table_exists?
+  ActiveRecord::Schema.define do
+    create_table :items do |t|
+      t.string :title
+      t.string :guid
+      t.string :url
+      t.string :description
+      t.string :author
+      t.integer :keyword_id
+      t.timestamp :publish
+      t.timestamps
+    end
+  end
+end
+
+feed = FeedNormalizer::FeedNormalizer.parse open(feed_url)
+
+feed.entries.each do |entry|
+  item = Item.where('title = :title OR url = :url OR guid = :guid',
+                    { title: entry.title, url: entry.url, guid: entry.id })
+
+  if item.empty?
+    new_item = Item.new
+    new_item.title = entry.title.gsub(/<[^>]*/, '')
+    new_item.guid = entry.id
+    if entry.author
+      new_item.author = entry.author
+    end
+
+    new_item.url = entry.url
+    new_item.description = entry.description
+    new_item.publish = entry.date_published
+
+    new_item.save
+  else
+    puts "processing item '#{entry.title}' - old"
+  end
+end
