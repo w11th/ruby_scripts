@@ -1,0 +1,49 @@
+#!/usr/bin/env ruby -w
+
+gem 'cmdparse', '2.0.2'
+require 'cmdparse'
+require 'feed-normalizer'
+require 'open-uri'
+require 'date'
+require 'uri'
+
+cmd = CmdParse::CommandParser.new(true, true)
+cmd.program_name = 'jobsearch'
+cmd.program_version = [0, 1, 0]
+
+cmd.add_command(CmdParse::HelpCommand.new, true)
+cmd.add_command(CmdParse::VersionCommand.new, true)
+
+indeed = CmdParse::Command.new('indeed', false)
+indeed.short_desc = 'Search for jobs via Indeed.com' \
+                    ' and prints the top then results.'
+
+indeed.description = 'This command searches Indeed.com for jobs matching [ARGS].' \
+                     'You can specify a location to search via ' \
+                     'the -l and -r switches.'
+
+indeed.options = CmdParse::OptionParserWrapper.new do |opt|
+  opt.on('-l', '--location LOCATION',
+         'Show jobs from LOCATION only') { |location| $location = location }
+  opt.on('-r', '--radius RADIUS',
+         'Sets a distance in miles from LOCATION to search from.' \
+         'This option has no effect ' \
+         'without the -l option.') { |radius| $radius = radius }
+end
+
+indeed.set_execution_block do |args|
+  search_string = args.join(' ')
+  feed_url = 'http://rss.indeed.com/rss?' \
+             "q=#{URI.escape(search_string)}" \
+             "&l=#{$location}&sort=date&radius=#{$radius}"
+  puts "Job match \"#{search_string}\" from indeed.com"
+  puts "for more detail, see the following URL:\n\t#{feed_url}\n\n"
+
+  feed = FeedNormalizer::FeedNormalizer.parse open(feed_url)
+  feed.items.each do |item|
+    puts item.title
+  end
+end
+
+cmd.add_command(indeed, true)
+cmd.parse
