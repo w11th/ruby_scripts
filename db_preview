@@ -1,0 +1,94 @@
+#!/usr/bin/env ruby -w
+
+require 'erubis'
+require 'active_record'
+require 'optparse'
+
+options = {}
+opt = OptionParser.new do |opts|
+  opts.banner = "Usage: #{$0} [options] hostname.com file1 file2 file3..."
+  opts.on('-a', '--adapter ADAPTER', 'adapter') do |a|
+    options[:adapter] = a
+  end
+
+  opts.on('-H', '--host HOST', 'host') do |h|
+    options[:host] = h
+  end
+
+  opts.on('-u', '--username USERNAME', 'username') do |u|
+    options[:username] = u
+  end
+
+  opts.on('-p', '--password PASSWORD', 'password') do |p|
+    options[:password] = p
+  end
+
+  opts.on('-o', '--port PORT', 'port') do |o|
+    options[:port] = o
+  end
+
+  opts.on('-d', '--database DATABASE', 'database') do |d|
+    options[:database] = d
+  end
+
+  opts.on('-t', '--table TABLE', 'table') do |t|
+    options[:table] = t
+  end
+
+  opts.on_tail('-h', '--help', 'Print this help') do
+    puts opts
+    exit
+  end
+end
+
+opt.parse!
+
+def make_sure(options, option)
+  unless options[option]
+    puts "Please specify #{option}"
+    puts opt
+    exit
+  end
+end
+
+make_sure(options, :adapter)
+make_sure(options, :database)
+make_sure(options, :table)
+
+connection_options = nil
+if options[:adapter] == 'sqlite3'
+  connection_options = {
+    adapter: 'sqlite3',
+    database: options[:database]
+  }
+end
+
+if options[:adapter] == 'mysql'
+  connection_options = {
+    adapter: 'mysql',
+    database: options[:database],
+    host: options[:host] || 'localhost',
+    username: options[:username] || 'root',
+    password: options[:password] || ''
+  }
+end
+
+if connection_options.nil?
+  puts 'Unsupported adapter'
+  exit
+end
+
+ActiveRecord::Base.establish_connection(
+  connection_options
+)
+
+class OutputTable < ActiveRecord::Base
+end
+
+OutputTable.table_name = options[:table]
+
+context = { table: OutputTable, print_data: OutputTable.all }
+
+eruby_object = Erubis::Eruby.new(File.read('template.erb'))
+
+puts eruby_object.evaluate(context)
