@@ -1,0 +1,55 @@
+#!/usr/bin/env ruby -w
+
+origin = ARGV[0]
+target = ARGV[1]
+
+versions_dir = File.join(`rbenv root`.chomp, 'versions')
+Dir.chdir(versions_dir)
+installed_versions = Dir.glob('*').map
+
+unless installed_versions.include?(origin)
+  puts "Origin version '#{origin}' is not installed."
+  exit 1
+end
+
+unless installed_versions.include?(target)
+  puts "Target version '#{target}' is not installed."
+  puts "Run 'rbenv install #{target}' first."
+  exit 1
+end
+
+origin_gemsets_dir = File.join(ENV['RBENV_ROOT'], 'versions', origin, 'gemsets')
+unless Dir.exist?(origin_gemsets_dir)
+  puts "No gemsets directory #{origin_gemsets_dir} found."
+  exit 1
+end
+
+origin_gemsets = []
+Dir.chdir(origin_gemsets_dir)
+Dir.glob('*') do |gemset|
+  next if gemset =~ /^\./
+  origin_gemsets << gemset
+end
+
+def get_gems(version, gemset)
+  dir = File.join(ENV['RBENV_ROOT'], 'versions', version, 'gemsets', gemset, 'specifications')
+  Gem::Specification.send(:installed_stubs, [dir], "*.gemspec").map {|spec| [spec.name, spec.version.to_s]}
+end
+
+def install_gems(gems, version, gemset)
+  env = { 'RBEVN_VERSION' => version, 'RBENV_GEMSETS' => gemset }
+  gems.each do |gem_name, gem_version|
+    p "Install: #{gem_name} #{gem_version} To: #{version}:#{gemset}"
+    p system(env, 'rbenv exec gem install', gem_name, '-v', gem_version)
+  end
+end
+
+gemset = 'global'
+puts "1. Sync #{gemset} gemset fist."
+if origin_gemsets.delete(gemset)
+  gems = get_gems(origin, gemset)
+  puts "Gems installed in #{origin}:#{gemset}", gems.to_s
+  # install_gems(gems, target, gemset)
+else
+  puts "No global gemset."
+end

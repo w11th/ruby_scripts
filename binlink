@@ -1,0 +1,28 @@
+#!/usr/bin/env ruby -w
+
+# usage = <<-EOF
+#   Link script to ~/Workspace/.bin directory.
+#   Example usage:
+#     binlink script_name
+# EOF
+
+source = ARGV[0]
+
+source = File.absolute_path(File.expand_path(source)) if source
+
+unless source && File.file?(source) && File.executable?(source)
+  puts 'The file is not a executable file.'
+  exit 1
+end
+
+target_dir = File.expand_path(File.join('~', 'Workspace', '.bin'))
+
+unless Dir.exist?(target_dir)
+  puts "The #{target_dir} doesn't exist."
+  exit 1
+end
+
+target = File.join(target_dir, File.basename(source))
+
+puts "Symbol link #{source} to #{target}"
+File.symlink(source, target)
