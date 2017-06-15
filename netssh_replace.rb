@@ -10,7 +10,7 @@ opt = OptionParser.new do |opts|
   opts.on('-u', '--username USERNAME', 'username') { |u| options[:username] = u }
   opts.on('-p', '--password PASSWORD', 'password') { |p| options[:password] = p }
   opts.on('-o', '--port PORT', 'port') { |o| options[:port] = o }
-  opts.on('-h', '--help', 'username') do
+  opts.on('-h', '--help', 'Show this message') do
     puts opts.help
     exit
   end
