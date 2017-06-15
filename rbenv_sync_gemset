@@ -3,8 +3,16 @@
 origin = ARGV[0]
 target = ARGV[1]
 
-versions_dir = File.join(`rbenv root`.chomp, 'versions')
-Dir.chdir(versions_dir)
+CLEAR        = "\e[0m".freeze
+RED          = "\e[31m".freeze
+YELLOW       = "\e[33m".freeze
+GREEN        = "\e[32m".freeze
+
+RBENV_ROOT   = ENV['RBENV_ROOT']
+VERSIONS_DIR = File.join(RBENV_ROOT, 'versions')
+
+# Check versions
+Dir.chdir(VERSIONS_DIR)
 installed_versions = Dir.glob('*').map
 
 unless installed_versions.include?(origin)
@@ -18,38 +26,102 @@ unless installed_versions.include?(target)
   exit 1
 end
 
-origin_gemsets_dir = File.join(ENV['RBENV_ROOT'], 'versions', origin, 'gemsets')
-unless Dir.exist?(origin_gemsets_dir)
-  puts "No gemsets directory #{origin_gemsets_dir} found."
-  exit 1
+# define methods
+def get_gemsets(version)
+  gemsets_dir = File.join(VERSIONS_DIR, version, 'gemsets')
+  gemsets = []
+  return gemsets unless Dir.exist?(gemsets_dir)
+
+  Dir.chdir(gemsets_dir)
+  Dir.glob('*') do |gemset|
+    next if gemset =~ /^\./
+    gemsets << gemset
+  end
+  gemsets
 end
 
-origin_gemsets = []
-Dir.chdir(origin_gemsets_dir)
-Dir.glob('*') do |gemset|
-  next if gemset =~ /^\./
-  origin_gemsets << gemset
+def get_default_dir(version)
+  `$(RBENV_VERSION=#{version} rbenv which ruby) -e 'puts Gem.default_dir'`.chomp
+end
+
+def get_gemset_dir(version, gemset)
+  File.join(VERSIONS_DIR, version, 'gemsets', gemset)
 end
 
 def get_gems(version, gemset)
-  dir = File.join(ENV['RBENV_ROOT'], 'versions', version, 'gemsets', gemset, 'specifications')
-  Gem::Specification.send(:installed_stubs, [dir], "*.gemspec").map {|spec| [spec.name, spec.version.to_s]}
+  gemset_dir = get_gemset_dir(version, gemset)
+  dir = File.join(gemset_dir, 'specifications')
+  Gem::Specification.send(:installed_stubs, [dir], "*.gemspec").map { |spec| [spec.name, spec.version.to_s] }
 end
 
-def install_gems(gems, version, gemset)
-  env = { 'RBEVN_VERSION' => version, 'RBENV_GEMSETS' => gemset }
+def install_gems(gems, version, dir, paths)
+  ENV['GEM_HOME'] = dir
+  ENV['GEM_PATH'] = paths
+  gem_command = `RBENV_VERSION=#{version} rbenv which gem`.chomp
   gems.each do |gem_name, gem_version|
-    p "Install: #{gem_name} #{gem_version} To: #{version}:#{gemset}"
-    p system(env, 'rbenv exec gem install', gem_name, '-v', gem_version)
+    puts "#{GREEN}#{[gem_command, 'install', gem_name, '-v', gem_version, '-s', 'https://gems.ruby-china.org'].join(' ')}#{CLEAR}"
+    system(gem_command, 'install', gem_name, '-v', gem_version)
   end
 end
 
-gemset = 'global'
-puts "1. Sync #{gemset} gemset fist."
-if origin_gemsets.delete(gemset)
+def create_gemset(version, gemset)
+  # gemset_dir = get_gemset_dir(version, gemset)
+  # if Dir.exist?(gemset_dir)
+  #   Dir.chdir(gemset_dir)
+  #   unless Dir.glob('*').empty?
+  #     puts "Gemset #{version} #{gemset} not empty: #{gemset_dir}. Delete it?(y/N)"
+  #     ans = $stdin.gets.chomp
+  #     p ans
+  system("rbenv gemset delete #{version} #{gemset}")
+  #   end
+  # end
+  system("rbenv gemset create #{version} #{gemset}")
+end
+
+GLOBAL_GEMSET = 'global'.freeze
+
+def sync_gemset(origin, target, gemset)
+  puts "#{RED}**** Sync #{origin}:#{gemset} to #{target}:#{gemset} ***#{CLEAR}"
+  puts "#{YELLOW}A. Create gemset #{target}:#{gemset}#{CLEAR}"
+  create_gemset(target, gemset)
+
+  puts "#{YELLOW}B. Get gems from #{origin}:#{gemset}#{CLEAR}"
   gems = get_gems(origin, gemset)
-  puts "Gems installed in #{origin}:#{gemset}", gems.to_s
-  # install_gems(gems, target, gemset)
-else
-  puts "No global gemset."
+  gems.each do |gem|
+    puts "- #{gem[0]} (#{gem[1]})"
+  end
+
+  puts "#{YELLOW}C. Install gems into #{origin}:#{gemset}#{CLEAR}"
+  paths = []
+  target_default_dir = get_default_dir(target)
+  paths << target_default_dir
+
+  unless gemset == GLOBAL_GEMSET
+    target_global_dir = get_gemset_dir(target, GLOBAL_GEMSET)
+    paths << target_global_dir
+  end
+
+  target_gemset_dir = get_gemset_dir(target, gemset)
+  paths << target_gemset_dir
+  dir = target_gemset_dir
+  paths = paths.reverse.join(':')
+  puts "#{GREEN}GEM_HOME = #{dir}#{CLEAR}"
+  puts "#{GREEN}GEM_PATH = #{paths}#{CLEAR}"
+
+  install_gems(gems, target, dir, paths)
+end
+
+# Sync gemsets
+origin_gemsets = get_gemsets(origin)
+
+if origin_gemsets.empty?
+  puts "No gemsets from #{origin} need to sync"
+  exit 1
+end
+
+# sync global first, it's important.
+origin_gemsets.unshift(GLOBAL_GEMSET) if origin_gemsets.delete(GLOBAL_GEMSET)
+
+origin_gemsets.each do |gemset|
+  sync_gemset(origin, target, gemset)
 end
