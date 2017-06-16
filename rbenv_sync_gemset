@@ -34,7 +34,7 @@ def get_gemsets(version)
 
   Dir.chdir(gemsets_dir)
   Dir.glob('*') do |gemset|
-    next if gemset =~ /^\./
+    next if gemset.match?(/^\./)
     gemsets << gemset
   end
   gemsets
