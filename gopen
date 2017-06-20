@@ -1,0 +1,19 @@
+#!/usr/bin/env ruby -w
+
+require 'english'
+
+gemname = ARGV[0]
+
+unless gemname
+  puts 'Specify the gem name.'
+  exit 1
+end
+
+gempath = `gem which #{gemname}`.chomp
+
+if $CHILD_STATUS && $CHILD_STATUS.exitstatus.zero?
+  puts "open: #{gempath}"
+  system('emacsclient', '-t', gempath)
+else
+  puts gempath
+end
